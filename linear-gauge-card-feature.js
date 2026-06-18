@@ -4,65 +4,7 @@ import {
   html,
 } from "https://unpkg.com/lit-element@2.0.1/lit-element.js?module";
 
-// Map a segment's `color` to a CSS background: HA theme colors (`--<name>-color`) resolve, else pass through.
-function resolveColor(color) {
-  if (typeof color !== "string") return color;
-  const key = color.trim().toLowerCase();
-  if (!key) return color;
-
-  // A name is a theme color when the active theme defines a matching `--<name>-color`.
-  const cssVar = `--${key}-color`;
-  const isThemeColor =
-    getComputedStyle(document.body).getPropertyValue(cssVar).trim() !== "";
-  return isThemeColor ? `var(${cssVar})` : color;
-}
-
-// Maps the user's `number_format` preference to a locale (HA's numberFormatToLocale).
-const numberFormatToLocale = (locale) => {
-  switch (locale?.number_format) {
-    case "comma_decimal":
-      return ["en-US", "en"];
-    case "decimal_comma":
-      return ["de", "es", "it"];
-    case "space_comma":
-      return ["fr", "sv", "cs"];
-    case "quote_decimal":
-      return ["de-CH"];
-    case "system":
-      return undefined;
-    default:
-      return locale?.language;
-  }
-};
-
-// Formats a number using the user's locale and entity's display precision.
-const formatNumber = (num, locale, options) =>
-  locale?.number_format === "none"
-    ? new Intl.NumberFormat("en-US", { ...options, useGrouping: false }).format(
-        num,
-      )
-    : new Intl.NumberFormat(numberFormatToLocale(locale), options).format(num);
-
-// HA's getNumberFormatOptions: honor the entity's display precision, else drop decimals for integer states.
-const numberFormatOptions = (stateObj, entry) => {
-  const precision = entry?.display_precision;
-  if (precision != null) {
-    return {
-      minimumFractionDigits: precision,
-      maximumFractionDigits: precision,
-    };
-  }
-  if (
-    Number.isInteger(Number(stateObj?.attributes?.step)) &&
-    Number.isInteger(Number(stateObj?.state))
-  ) {
-    return { maximumFractionDigits: 0 };
-  }
-  return undefined;
-};
-
-// The feature supports any sensor entity with a unit or state class.
-const supportsLinearGauge = (hass, context) => {
+const supportsLinearGaugeCardFeature = (hass, context) => {
   const s = hass.states[context?.entity_id];
   return (
     !!s &&
@@ -71,13 +13,46 @@ const supportsLinearGauge = (hass, context) => {
   );
 };
 
+// Quick and dirty version of HA's resolveColor()
+function resolveColor(color) {
+  if (typeof color !== "string") return color;
+  const key = color.trim().toLowerCase();
+  if (!key) return color;
+
+  const cssVar = `--${key}-color`;
+  const isThemeColor =
+    getComputedStyle(document.body).getPropertyValue(cssVar).trim() !== "";
+  return isThemeColor ? `var(${cssVar})` : color;
+}
+
+// Position of a value along a plain linear bar, as a percentage (0–100).
+function linearPercent(value, min, max) {
+  const clamped = Math.min(max, Math.max(min, value));
+  return ((clamped - min) / (max - min)) * 100;
+}
+
+// Position of a value along a weighted linear bar, as a percentage (0–100).
+function weightedPercent(value, bounds, weights) {
+  const total = weights.reduce((a, w) => a + w, 0) || 1;
+
+  let start = 0; // % position where the current segment begins
+  for (let i = 0; i < bounds.length - 1; i++) {
+    const width = (weights[i] / total) * 100;
+    if (value <= bounds[i + 1] || i === bounds.length - 2) {
+      const range = bounds[i + 1] - bounds[i];
+      const through = range === 0 ? 0 : (value - bounds[i]) / range;
+      return Math.min(100, Math.max(0, start + through * width));
+    }
+    start += width;
+  }
+  return 0;
+}
+
 class LinearGaugeCardFeature extends LitElement {
   static get properties() {
-    // hass & context are assigned by HA; _config is derived internal state.
     return {
       hass: undefined,
       context: undefined,
-      color: undefined,
       _config: { state: true },
     };
   }
@@ -93,72 +68,76 @@ class LinearGaugeCardFeature extends LitElement {
   }
 
   setConfig(config) {
-    if (!config) throw new Error("Invalid configuration");
-
-    const { boundary_labels = false, weighted = false } = config;
-    const min = config.min != null ? Number(config.min) : 0;
-    const max = config.max != null ? Number(config.max) : 100;
-
-    // If no segments are defined, render one bar in the card's feature color, spanning min..max.
-    if (!config.segments?.length) {
-      this._config = {
-        segments: [{ flex: 1, color: "var(--feature-color)" }],
-        boundaries: [min, max],
-        edges: [0, 100],
-        boundary_labels,
-      };
-      return;
+    if (!config) {
+      throw new Error("Invalid configuration");
     }
-
-    // Build and sort segments by `from`
-    const segments = config.segments
-      .slice()
-      .sort((a, b) => Number(a.from) - Number(b.from));
-
-    // Calculate boundaries and edges based on segments and min/max.
-    const boundaries = [
-      min,
-      ...segments.slice(1).map((s) => Number(s.from)),
-      max,
-    ];
-
-    // Calculate segment widths
-    const weights = segments.map((s, i) =>
-      weighted ? Number(s.weight ?? 1) : boundaries[i + 1] - boundaries[i],
-    );
-    const total = weights.reduce((a, w) => a + w, 0) || 1;
-    const edges = [0];
-    for (const w of weights) edges.push(edges.at(-1) + (w / total) * 100);
-
-    this._config = {
-      segments: segments.map((s, i) => ({
-        flex: Math.max(0, weights[i]),
-        color: resolveColor(s.color),
-      })),
-      boundaries,
-      edges,
-      boundary_labels,
-    };
+    this._config = config;
   }
 
   render() {
-    if (!this._config || !this.hass) return null;
-    const { segments, boundaries, edges, boundary_labels } = this._config;
+    if (
+      !this._config ||
+      !this.hass ||
+      !this.context ||
+      !this.context.entity_id ||
+      !this.hass.states[this.context.entity_id] ||
+      !supportsLinearGaugeCardFeature(this.hass, this.context)
+    ) {
+      return null;
+    }
 
-    // Non-numeric states (unavailable/unknown/no entity) give NaN, which hides the marker.
-    const stateObj = this.hass.states[this.context?.entity_id];
-    const value = stateObj ? parseFloat(stateObj.state) : NaN;
+    const stateObj = this.hass.states[this.context.entity_id];
+    const value = parseFloat(stateObj.state);
+    const min = this._config.min ?? 0;
+    const max = this._config.max ?? 100;
 
-    // The card hands us `color` (the entity's accent); expose it as --feature-color
-    // so the default single-segment bar matches the card, like core features do.
-    const featureColor = this.color
-      ? resolveColor(this.color)
-      : "var(--primary-color)";
+    if (isNaN(value) || min >= max) {
+      return null;
+    }
+
+    const { weighted = false, boundary_labels = false } = this._config;
+
+    // Sorted segments, or null for a plain bar gauge.
+    const segments = this._config.segments?.length
+      ? [...this._config.segments].sort((a, b) => a.from - b.from)
+      : null;
+
+    // Weighted mode only applies when there are segments to weight.
+    const useWeights = weighted && segments;
+
+    // Boundary values along the bar, and (in weighted mode) each segment's weight.
+    const bounds = segments
+      ? [min, ...segments.slice(1).map((s) => Number(s.from)), max]
+      : [min, max];
+    const weights = segments?.map((s) => Number(s.weight ?? 1));
+
+    // % position of a value along the bar — weighted mode walks by weight, else linear.
+    const valuePercent = (v) =>
+      useWeights
+        ? weightedPercent(v, bounds, weights)
+        : linearPercent(v, min, max);
+
+    // % position of the value marker along the bar.
+    const markerPercent = valuePercent(value);
+
+    // The bars to draw, either from the segments or a two-part value fill.
+    const bars = segments
+      ? segments.map((s, i) => ({
+          flex: useWeights ? weights[i] : bounds[i + 1] - bounds[i],
+          color: resolveColor(s.color),
+        }))
+      : [
+          { flex: markerPercent, color: "var(--feature-color)" },
+          {
+            flex: 100 - markerPercent,
+            color: "color-mix(in srgb, var(--feature-color) 20%, transparent)",
+          },
+        ];
 
     return html`
-      <div class="bar-area" style="--feature-color:${featureColor}">
+      <div class="bar-area">
         <div class="bar">
-          ${segments.map(
+          ${bars.map(
             (s) =>
               html`<div
                 class="segment"
@@ -166,61 +145,29 @@ class LinearGaugeCardFeature extends LitElement {
               ></div>`,
           )}
         </div>
-        ${Number.isNaN(value)
-          ? ""
-          : html`<div
-              class="marker"
-              style="left:${this._valueToPercent(value)}%"
-            ></div>`}
+        ${segments
+          ? html`<div class="marker" style="left:${markerPercent}%"></div>`
+          : ""}
         ${boundary_labels
           ? html`<div class="labels">
-              ${boundaries.map((v, i) => {
-                // First/last labels align to the bar ends so they don't overflow.
+              ${bounds.map((v, i) => {
                 const edge =
                   i === 0
                     ? "edge-min"
-                    : i === boundaries.length - 1
+                    : i === bounds.length - 1
                       ? "edge-max"
                       : "";
                 return html`<div
                   class="label ${edge}"
-                  style="left:${edges[i]}%"
+                  style="left:${valuePercent(v)}%"
                 >
-                  ${this._formatLabel(v)}
+                  ${v}
                 </div>`;
               })}
             </div>`
           : ""}
       </div>
     `;
-  }
-
-  // Map a value to a position (0..100%) by piecewise interpolation through the segment edges.
-  _valueToPercent(v) {
-    const { boundaries, edges } = this._config;
-    const last = boundaries.length - 1;
-    const x = Math.min(boundaries[last], Math.max(boundaries[0], v));
-    for (let i = 0; i < last; i++) {
-      const a = boundaries[i];
-      const b = boundaries[i + 1];
-      if (x <= b || i === last - 1) {
-        const t = a === b ? 0 : (x - a) / (b - a);
-        return edges[i] + t * (edges[i + 1] - edges[i]);
-      }
-    }
-    return 0;
-  }
-
-  // Format a boundary label the way HA renders the entity's numbers.
-  _formatLabel(v) {
-    const n = Number(v);
-    if (Number.isNaN(n)) return "—";
-    const id = this.context?.entity_id;
-    const options = numberFormatOptions(
-      this.hass.states[id],
-      this.hass.entities?.[id],
-    );
-    return formatNumber(n, this.hass.locale, options);
   }
 
   static get styles() {
@@ -254,7 +201,6 @@ class LinearGaugeCardFeature extends LitElement {
         );
         box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
         transform: translateX(-50%);
-        transition: left 180ms ease-in-out;
       }
       .labels {
         position: relative;
@@ -281,18 +227,18 @@ class LinearGaugeCardFeature extends LitElement {
 customElements.define("linear-gauge", LinearGaugeCardFeature);
 
 const EDITOR_LABELS = {
-  boundary_labels: "Boundary labels",
-  weighted: "Weighted widths",
   min: "Minimum value",
   max: "Maximum value",
+  boundary_labels: "Boundary labels",
+  weighted: "Weighted segments",
   segments: "Segments",
 };
 
 const EDITOR_SCHEMA = [
-  { name: "boundary_labels", selector: { boolean: {} } },
-  { name: "weighted", selector: { boolean: {} } },
   { name: "min", selector: { number: { mode: "box", step: "any" } } },
   { name: "max", selector: { number: { mode: "box", step: "any" } } },
+  { name: "boundary_labels", selector: { boolean: {} } },
+  { name: "weighted", selector: { boolean: {} } },
   {
     name: "segments",
     selector: {
@@ -364,6 +310,6 @@ window.customCardFeatures = window.customCardFeatures || [];
 window.customCardFeatures.push({
   type: "linear-gauge",
   name: "Linear Gauge",
-  isSupported: supportsLinearGauge,
+  isSupported: supportsLinearGaugeCardFeature,
   configurable: true,
 });
