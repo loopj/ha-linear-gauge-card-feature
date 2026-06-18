@@ -6,11 +6,11 @@ import {
 
 // Generic fallback segments, used until the config supplies its own.
 const DEFAULT_SEGMENTS = [
-  { to: 20, color: "red" },
-  { to: 40, color: "yellow" },
-  { to: 60, color: "green" },
-  { to: 80, color: "yellow" },
-  { to: 100, color: "red" },
+  { from: 0, color: "red" },
+  { from: 20, color: "yellow" },
+  { from: 40, color: "green" },
+  { from: 60, color: "yellow" },
+  { from: 80, color: "red" },
 ];
 
 // Map a segment's `color` to a CSS background: HA theme colors (`--<name>-color`) resolve, else pass through.
@@ -94,6 +94,7 @@ class LinearGaugeCardFeature extends LitElement {
     return {
       type: "custom:linear-gauge",
       min: 0,
+      max: 100,
       segments: DEFAULT_SEGMENTS,
     };
   }
@@ -107,17 +108,23 @@ class LinearGaugeCardFeature extends LitElement {
 
     const { show_labels = true, weighted = false } = config;
 
+    // Build and sort segments
     const segments = (
       config.segments?.length ? config.segments : DEFAULT_SEGMENTS
     )
       .slice()
-      .sort((a, b) => Number(a.to) - Number(b.to));
+      .sort((a, b) => Number(a.from) - Number(b.from));
 
-    // The bar spans `min` (left edge) to the last segment's `to` (right edge).
+    // Build segment boundaries
     const min = config.min != null ? Number(config.min) : 0;
-    const boundaries = [min, ...segments.map((s) => Number(s.to))];
+    const max = config.max != null ? Number(config.max) : 100;
+    const boundaries = [
+      min,
+      ...segments.slice(1).map((s) => Number(s.from)),
+      max,
+    ];
 
-    // Segment width follows its value span, or its `weight` when `weighted`; `edges` are cumulative positions (%).
+    // Calculate segment widths and edges
     const weights = segments.map((s, i) =>
       weighted ? Number(s.weight ?? 1) : boundaries[i + 1] - boundaries[i],
     );
@@ -273,6 +280,7 @@ const EDITOR_LABELS = {
   show_labels: "Show labels",
   weighted: "Weighted widths",
   min: "Minimum value",
+  max: "Maximum value",
   segments: "Segments",
 };
 
@@ -280,19 +288,20 @@ const EDITOR_SCHEMA = [
   { name: "show_labels", selector: { boolean: {} } },
   { name: "weighted", selector: { boolean: {} } },
   { name: "min", selector: { number: { mode: "box", step: "any" } } },
+  { name: "max", selector: { number: { mode: "box", step: "any" } } },
   {
     name: "segments",
     selector: {
       object: {
         multiple: true,
         fields: {
-          to: {
-            label: "To",
+          from: {
+            label: "From",
             selector: { number: { mode: "box", step: "any" } },
           },
           color: {
             label: "Color",
-            selector: { ui_color: { default_color: true } },
+            selector: { ui_color: {} },
           },
           weight: {
             label: "Weight",
@@ -316,7 +325,13 @@ class LinearGaugeEditor extends LitElement {
   render() {
     if (!this.hass || !this._config) return html``;
     // Seed the feature's defaults so unset toggles display correctly.
-    const data = { min: 0, show_labels: true, segments: [], ...this._config };
+    const data = {
+      min: 0,
+      max: 100,
+      show_labels: true,
+      segments: [],
+      ...this._config,
+    };
     return html`
       <ha-form
         .hass=${this.hass}

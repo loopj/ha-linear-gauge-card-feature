@@ -31,9 +31,9 @@ features:
   - type: custom:linear-gauge
     show_labels: false
     segments:
-      - { to: 60, color: green }
-      - { to: 80, color: yellow }
-      - { to: 100, color: red }
+      - { from: 0, color: green }
+      - { from: 60, color: yellow }
+      - { from: 80, color: red }
 ```
 
 ### Pool Chemistry
@@ -48,25 +48,27 @@ icon: mdi:ph
 features:
   - type: custom:linear-gauge
     min: 4
+    max: 10
     weighted: true
     segments:
-      - { to: 7.0, color: "red", weight: 1 }
-      - { to: 7.2, color: "yellow", weight: 2 }
-      - { to: 7.6, color: "green", weight: 3 }
-      - { to: 7.8, color: "yellow", weight: 2 }
-      - { to: 10, color: "red", weight: 1 }
+      - { from: 4, color: "red", weight: 1 }
+      - { from: 7.0, color: "yellow", weight: 2 }
+      - { from: 7.2, color: "green", weight: 3 }
+      - { from: 7.6, color: "yellow", weight: 2 }
+      - { from: 7.8, color: "red", weight: 1 }
 ```
 
 ## Configuration
 
 The card feature can be configured from the dashboard's visual editor or in YAML.
 
-| Option              | Type    | Default     | Description                                                             |
-| ------------------- | ------- | ----------- | ----------------------------------------------------------------------- |
-| `min`               | number  | `0`         | Minimum value (left edge of the bar)                                    |
-| `weighted`          | boolean | `false`     | `false`: widths follow value span. `true`: use each segment's `weight`. |
-| `show_labels`       | boolean | `true`      | Show the boundary value labels under the bar.                           |
-| `segments`          | list    | _see below_ | Colored regions, each running up to `to` from `min`.                    |
-| `segments[].to`     | number  | required    | Upper bound of the segment (its right edge).                            |
-| `segments[].color`  | string  | required    | HA theme color name or CSS color.                                       |
-| `segments[].weight` | number  | `1`         | Relative width when `weighted: true`; ignored otherwise.                |
+| Option              | Type    | Default     | Description                                                              |
+| ------------------- | ------- | ----------- | ------------------------------------------------------------------------ |
+| `min`               | number  | `0`         | Minimum value (left edge of the bar).                                    |
+| `max`               | number  | `100`       | Maximum value (right edge of the bar).                                   |
+| `weighted`          | boolean | `false`     | Set to `true` to use proportional widths based on each segment's `weight`|
+| `show_labels`       | boolean | `true`      | Show the boundary value labels under the bar.                            |
+| `segments`          | list    |             |                                                                          |
+| `segments[].from`   | number  | required    | Value at which the segment's color begins. The first should equal `min`. |
+| `segments[].color`  | string  | required    | HA theme color name or CSS color.                                        |
+| `segments[].weight` | number  | `1`         | Relative width when `weighted: true`; ignored otherwise.                 |
