@@ -4,15 +4,6 @@ import {
   html,
 } from "https://unpkg.com/lit-element@2.0.1/lit-element.js?module";
 
-// Generic fallback segments, used until the config supplies its own.
-const DEFAULT_SEGMENTS = [
-  { from: 0, color: "red" },
-  { from: 20, color: "yellow" },
-  { from: 40, color: "green" },
-  { from: 60, color: "yellow" },
-  { from: 80, color: "red" },
-];
-
 // Map a segment's `color` to a CSS background: HA theme colors (`--<name>-color`) resolve, else pass through.
 function resolveColor(color) {
   if (typeof color !== "string") return color;
@@ -86,6 +77,7 @@ class LinearGaugeCardFeature extends LitElement {
     return {
       hass: undefined,
       context: undefined,
+      color: undefined,
       _config: { state: true },
     };
   }
@@ -93,9 +85,6 @@ class LinearGaugeCardFeature extends LitElement {
   static getStubConfig() {
     return {
       type: "custom:linear-gauge",
-      min: 0,
-      max: 100,
-      segments: DEFAULT_SEGMENTS,
     };
   }
 
@@ -106,25 +95,34 @@ class LinearGaugeCardFeature extends LitElement {
   setConfig(config) {
     if (!config) throw new Error("Invalid configuration");
 
-    const { show_labels = true, weighted = false } = config;
+    const { boundary_labels = true, weighted = false } = config;
+    const min = config.min != null ? Number(config.min) : 0;
+    const max = config.max != null ? Number(config.max) : 100;
 
-    // Build and sort segments
-    const segments = (
-      config.segments?.length ? config.segments : DEFAULT_SEGMENTS
-    )
+    // If no segments are defined, render one bar in the card's feature color, spanning min..max.
+    if (!config.segments?.length) {
+      this._config = {
+        segments: [{ flex: 1, color: "var(--feature-color)" }],
+        boundaries: [min, max],
+        edges: [0, 100],
+        boundary_labels,
+      };
+      return;
+    }
+
+    // Build and sort segments by `from`
+    const segments = config.segments
       .slice()
       .sort((a, b) => Number(a.from) - Number(b.from));
 
-    // Build segment boundaries
-    const min = config.min != null ? Number(config.min) : 0;
-    const max = config.max != null ? Number(config.max) : 100;
+    // Calculate boundaries and edges based on segments and min/max.
     const boundaries = [
       min,
       ...segments.slice(1).map((s) => Number(s.from)),
       max,
     ];
 
-    // Calculate segment widths and edges
+    // Calculate segment widths
     const weights = segments.map((s, i) =>
       weighted ? Number(s.weight ?? 1) : boundaries[i + 1] - boundaries[i],
     );
@@ -139,20 +137,26 @@ class LinearGaugeCardFeature extends LitElement {
       })),
       boundaries,
       edges,
-      show_labels,
+      boundary_labels,
     };
   }
 
   render() {
     if (!this._config || !this.hass) return null;
-    const { segments, boundaries, edges, show_labels } = this._config;
+    const { segments, boundaries, edges, boundary_labels } = this._config;
 
     // Non-numeric states (unavailable/unknown/no entity) give NaN, which hides the marker.
     const stateObj = this.hass.states[this.context?.entity_id];
     const value = stateObj ? parseFloat(stateObj.state) : NaN;
 
+    // The card hands us `color` (the entity's accent); expose it as --feature-color
+    // so the default single-segment bar matches the card, like core features do.
+    const featureColor = this.color
+      ? resolveColor(this.color)
+      : "var(--primary-color)";
+
     return html`
-      <div class="bar-area">
+      <div class="bar-area" style="--feature-color:${featureColor}">
         <div class="bar">
           ${segments.map(
             (s) =>
@@ -168,7 +172,7 @@ class LinearGaugeCardFeature extends LitElement {
               class="marker"
               style="left:${this._valueToPercent(value)}%"
             ></div>`}
-        ${show_labels
+        ${boundary_labels
           ? html`<div class="labels">
               ${boundaries.map((v, i) => {
                 // First/last labels align to the bar ends so they don't overflow.
@@ -277,7 +281,7 @@ class LinearGaugeCardFeature extends LitElement {
 customElements.define("linear-gauge", LinearGaugeCardFeature);
 
 const EDITOR_LABELS = {
-  show_labels: "Show labels",
+  boundary_labels: "Boundary labels",
   weighted: "Weighted widths",
   min: "Minimum value",
   max: "Maximum value",
@@ -285,7 +289,7 @@ const EDITOR_LABELS = {
 };
 
 const EDITOR_SCHEMA = [
-  { name: "show_labels", selector: { boolean: {} } },
+  { name: "boundary_labels", selector: { boolean: {} } },
   { name: "weighted", selector: { boolean: {} } },
   { name: "min", selector: { number: { mode: "box", step: "any" } } },
   { name: "max", selector: { number: { mode: "box", step: "any" } } },
@@ -328,7 +332,7 @@ class LinearGaugeEditor extends LitElement {
     const data = {
       min: 0,
       max: 100,
-      show_labels: true,
+      boundary_labels: true,
       segments: [],
       ...this._config,
     };
