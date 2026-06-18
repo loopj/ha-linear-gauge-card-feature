@@ -1,9 +1,9 @@
 # Linear Gauge Home Assistant Card Feature
 
+![example](example.png)
+
 A Home Assistant custom [card feature](https://developers.home-assistant.io/docs/frontend/custom-ui/custom-card-feature/)
 that renders a sensor entity as a value on a horizontal, multi-colored region bar with a marker for the current value.
-
-![example](example.png)
 
 ## Install
 
@@ -14,10 +14,31 @@ that renders a sensor entity as a value on a horizontal, multi-colored region ba
    - URL: `/local/linear-gauge-card-feature.js`
    - Type: **JavaScript Module**
 3. Refresh your browser (hard reload to clear the cache).
+4. Add it to the `features:` list of any card that supports features (e.g. the Tile card).
 
-## Usage
+## Examples
 
-Add it to the `features:` list of any card that supports features (e.g. the Tile card).
+### Litter Box
+
+![litter-box-example](litter-box-example.png)
+
+```yaml
+type: tile
+entity: sensor.litter_robot_4_waste_drawer
+name: Waste Drawer
+icon: mdi:emoticon-poop
+features:
+  - type: custom:linear-gauge
+    show_labels: false
+    segments:
+      - { to: 60, color: green }
+      - { to: 80, color: yellow }
+      - { to: 100, color: red }
+```
+
+### Pool Chemistry
+
+![pool-chemistry-example](pool-chemistry-example.png)
 
 ```yaml
 type: tile
@@ -38,17 +59,17 @@ features:
 
 ## Configuration
 
-| Option         | Type    | Default        | Description                                                         |
-| -------------- | ------- | -------------- | ------------------------------------------------------------------- |
-| `min`          | number  | `0`            | Left edge of the bar. Right edge is the last segment's `to`.        |
-| `segments`     | list    | _see below_    | Colored regions, each running up to `to` from `min`.                |
-| `weighted`     | boolean | `false`        | `false`: widths follow value span. `true`: use each segment's `weight`. |
-| `show_labels`  | boolean | `true`         | Show the boundary value labels under the bar.                       |
+| Option        | Type    | Default     | Description                                                             |
+| ------------- | ------- | ----------- | ----------------------------------------------------------------------- |
+| `min`         | number  | `0`         | Left edge of the bar. Right edge is the last segment's `to`.            |
+| `segments`    | list    | _see below_ | Colored regions, each running up to `to` from `min`.                    |
+| `weighted`    | boolean | `false`     | `false`: widths follow value span. `true`: use each segment's `weight`. |
+| `show_labels` | boolean | `true`      | Show the boundary value labels under the bar.                           |
 
 Each `segments` entry is an object:
 
-| Field    | Type   | Default  | Description                                                            |
-| -------- | ------ | -------- | --------------------------------------------------------------------- |
-| `to`     | number | required | Upper bound of the segment (its right-edge value). Sorted by `to`.    |
-| `color`  | string | required | Fill color — a CSS color or HA theme color name.          |
-| `weight` | number | `1`      | Relative width when `weighted: true`; ignored otherwise.              |
+| Field    | Type   | Default  | Description                                                        |
+| -------- | ------ | -------- | ------------------------------------------------------------------ |
+| `to`     | number | required | Upper bound of the segment (its right-edge value). Sorted by `to`. |
+| `color`  | string | required | Fill color — a CSS color or HA theme color name.                   |
+| `weight` | number | `1`      | Relative width when `weighted: true`; ignored otherwise.           |
