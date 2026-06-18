@@ -29,7 +29,6 @@ name: Waste Drawer
 icon: mdi:emoticon-poop
 features:
   - type: custom:linear-gauge
-    boundary_labels: false
     segments:
       - { from: 0, color: green }
       - { from: 60, color: yellow }
@@ -50,6 +49,7 @@ features:
     min: 4
     max: 10
     weighted: true
+    boundary_labels: true
     segments:
       - { from: 4, color: "red", weight: 1 }
       - { from: 7.0, color: "yellow", weight: 2 }
@@ -67,7 +67,7 @@ The card feature can be configured from the dashboard's visual editor or in YAML
 | `min`               | number  | `0`         | Minimum value (left edge of the bar).                                    |
 | `max`               | number  | `100`       | Maximum value (right edge of the bar).                                   |
 | `weighted`          | boolean | `false`     | Set to `true` to use proportional widths based on each segment's `weight`|
-| `boundary_labels`   | boolean | `true`      | Show the boundary value labels under the bar.                            |
+| `boundary_labels`   | boolean | `false`     | Show the boundary value labels under the bar.                            |
 | `segments`          | list    | _optional_  | Colored regions tiling the bar. Omit for a single bar in the card's feature color. |
 | `segments[].from`   | number  | required    | Value at which the segment's color begins. The first should equal `min`. |
 | `segments[].color`  | string  | required    | HA theme color name or CSS color.                                        |

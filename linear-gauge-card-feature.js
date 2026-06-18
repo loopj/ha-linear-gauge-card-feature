@@ -95,7 +95,7 @@ class LinearGaugeCardFeature extends LitElement {
   setConfig(config) {
     if (!config) throw new Error("Invalid configuration");
 
-    const { boundary_labels = true, weighted = false } = config;
+    const { boundary_labels = false, weighted = false } = config;
     const min = config.min != null ? Number(config.min) : 0;
     const max = config.max != null ? Number(config.max) : 100;
 
@@ -332,7 +332,7 @@ class LinearGaugeEditor extends LitElement {
     const data = {
       min: 0,
       max: 100,
-      boundary_labels: true,
+      boundary_labels: false,
       segments: [],
       ...this._config,
     };
