@@ -59,17 +59,14 @@ features:
 
 ## Configuration
 
-| Option        | Type    | Default     | Description                                                             |
-| ------------- | ------- | ----------- | ----------------------------------------------------------------------- |
-| `min`         | number  | `0`         | Left edge of the bar. Right edge is the last segment's `to`.            |
-| `segments`    | list    | _see below_ | Colored regions, each running up to `to` from `min`.                    |
-| `weighted`    | boolean | `false`     | `false`: widths follow value span. `true`: use each segment's `weight`. |
-| `show_labels` | boolean | `true`      | Show the boundary value labels under the bar.                           |
+The card feature can be configured from the dashboard's visual editor or in YAML.
 
-Each `segments` entry is an object:
-
-| Field    | Type   | Default  | Description                                                        |
-| -------- | ------ | -------- | ------------------------------------------------------------------ |
-| `to`     | number | required | Upper bound of the segment (its right-edge value). Sorted by `to`. |
-| `color`  | string | required | Fill color — a CSS color or HA theme color name.                   |
-| `weight` | number | `1`      | Relative width when `weighted: true`; ignored otherwise.           |
+| Option              | Type    | Default     | Description                                                             |
+| ------------------- | ------- | ----------- | ----------------------------------------------------------------------- |
+| `min`               | number  | `0`         | Minimum value (left edge of the bar)                                    |
+| `weighted`          | boolean | `false`     | `false`: widths follow value span. `true`: use each segment's `weight`. |
+| `show_labels`       | boolean | `true`      | Show the boundary value labels under the bar.                           |
+| `segments`          | list    | _see below_ | Colored regions, each running up to `to` from `min`.                    |
+| `segments[].to`     | number  | required    | Upper bound of the segment (its right edge).                            |
+| `segments[].color`  | string  | required    | HA theme color name or CSS color.                                       |
+| `segments[].weight` | number  | `1`         | Relative width when `weighted: true`; ignored otherwise.                |

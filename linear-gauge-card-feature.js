@@ -98,6 +98,10 @@ class LinearGaugeCardFeature extends LitElement {
     };
   }
 
+  static getConfigElement() {
+    return document.createElement("linear-gauge-editor");
+  }
+
   setConfig(config) {
     if (!config) throw new Error("Invalid configuration");
 
@@ -265,9 +269,82 @@ class LinearGaugeCardFeature extends LitElement {
 
 customElements.define("linear-gauge", LinearGaugeCardFeature);
 
+const EDITOR_LABELS = {
+  show_labels: "Show labels",
+  weighted: "Weighted widths",
+  min: "Minimum value",
+  segments: "Segments",
+};
+
+const EDITOR_SCHEMA = [
+  { name: "show_labels", selector: { boolean: {} } },
+  { name: "weighted", selector: { boolean: {} } },
+  { name: "min", selector: { number: { mode: "box", step: "any" } } },
+  {
+    name: "segments",
+    selector: {
+      object: {
+        multiple: true,
+        fields: {
+          to: {
+            label: "To",
+            selector: { number: { mode: "box", step: "any" } },
+          },
+          color: {
+            label: "Color",
+            selector: { ui_color: { default_color: true } },
+          },
+          weight: {
+            label: "Weight",
+            selector: { number: { mode: "box", step: "any", min: 0 } },
+          },
+        },
+      },
+    },
+  },
+];
+
+class LinearGaugeEditor extends LitElement {
+  static get properties() {
+    return { hass: {}, context: {}, _config: { state: true } };
+  }
+
+  setConfig(config) {
+    this._config = config;
+  }
+
+  render() {
+    if (!this.hass || !this._config) return html``;
+    // Seed the feature's defaults so unset toggles display correctly.
+    const data = { min: 0, show_labels: true, segments: [], ...this._config };
+    return html`
+      <ha-form
+        .hass=${this.hass}
+        .data=${data}
+        .schema=${EDITOR_SCHEMA}
+        .computeLabel=${(s) => EDITOR_LABELS[s.name] || s.name}
+        @value-changed=${this._changed}
+      ></ha-form>
+    `;
+  }
+
+  _changed(ev) {
+    this.dispatchEvent(
+      new CustomEvent("config-changed", {
+        detail: { config: ev.detail.value },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+}
+
+customElements.define("linear-gauge-editor", LinearGaugeEditor);
+
 window.customCardFeatures = window.customCardFeatures || [];
 window.customCardFeatures.push({
   type: "linear-gauge",
   name: "Linear Gauge",
   isSupported: supportsLinearGauge,
+  configurable: true,
 });
